@@ -16,14 +16,12 @@ type ContestsResponse = {
   results: Contest[];
 };
 
-const HOSTS = ["leetcode", "codingninjas", "codechef", "codeforces", "atcoder"] as const;
+const HOSTS = ["leetcode", "codechef", "codeforces"] as const;
 
 const HOST_COLORS: Record<string, string> = {
   leetcode:      "#ffa116",
-  codingninjas:  "#f97316",
   codechef:      "#b45309",
   codeforces:    "#1f8acb",
-  atcoder:       "#a855f7",
 };
 
 function timeUntil(unix: number) {

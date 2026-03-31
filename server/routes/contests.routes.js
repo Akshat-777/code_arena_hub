@@ -152,7 +152,9 @@ router.get("/", authMiddleware, async (req, res) => {
       });
     }
 
-    const query = {};
+    const query = {
+      startTimeUnix: { $gt: Math.floor(Date.now() / 1000) - 7200 } // Show ongoing (2h grace) or future
+    };
     if (host) {
       const platformArray = host.split(",");
       Object.assign(query, { host: { $in: platformArray } });

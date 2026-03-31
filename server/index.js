@@ -8,7 +8,6 @@ import userRoutes from "./routes/user.routes.js";
 import contestsRoutes from "./routes/contests.routes.js";
 import hackathonsRoutes from "./routes/hackathons.routes.js";
 import potdRoutes from "./routes/potd.routes.js";
-import challengesRoutes from "./routes/challenges.routes.js";
 
 dotenv.config();
 
@@ -26,7 +25,6 @@ app.use("/api/user", userRoutes);
 app.use("/api/contests", contestsRoutes);
 app.use("/api/hackathons", hackathonsRoutes);
 app.use("/api/potd", potdRoutes);
-app.use("/api/challenges", challengesRoutes);
 
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;

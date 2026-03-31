@@ -6,8 +6,8 @@ import DashboardPage from "./pages/DashboardPage";
 import ContestsPage from "./pages/ContestsPage";
 import HackathonsPage from "./pages/HackathonsPage";
 import PotdPage from "./pages/PotdPage";
-import ChallengesPage from "./pages/ChallengesPage";
 import ProfilePage from "./pages/ProfilePage";
+import RankingsPage from "./pages/RankingsPage";
 
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem("code_arena_token"));
@@ -16,6 +16,12 @@ const App = () => {
     window.addEventListener("auth-change", checkAuth);
     return () => window.removeEventListener("auth-change", checkAuth);
   }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("code_arena_token");
+    window.dispatchEvent(new Event("auth-change"));
+    window.location.href = "/login"; // Force reload to clear all states
+  };
 
   return (
     <div className="ca-app">
@@ -35,8 +41,8 @@ const App = () => {
             <NavLink className={({ isActive }) => isActive ? "ca-navLink ca-navLinkActive" : "ca-navLink"} to="/potd">
               POTD
             </NavLink>
-            <NavLink className={({ isActive }) => isActive ? "ca-navLink ca-navLinkActive" : "ca-navLink"} to="/challenges">
-              Challenges
+            <NavLink className={({ isActive }) => isActive ? "ca-navLink ca-navLinkActive" : "ca-navLink"} to="/rankings">
+              Rankings
             </NavLink>
             {isLoggedIn ? (
               <>
@@ -46,6 +52,13 @@ const App = () => {
                 <NavLink className={({ isActive }) => isActive ? "ca-navLink ca-navLinkActive" : "ca-navLink"} to="/profile">
                   Profile
                 </NavLink>
+                <button
+                  onClick={handleLogout}
+                  className="ca-navLink"
+                  style={{ color: "#f87171", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, padding: "4px 12px", marginLeft: 8 }}
+                >
+                  Sign out
+                </button>
               </>
             ) : (
               <NavLink
@@ -73,7 +86,7 @@ const App = () => {
           <Route path="/contests" element={<ContestsPage />} />
           <Route path="/hackathons" element={<HackathonsPage />} />
           <Route path="/potd" element={<PotdPage />} />
-          <Route path="/challenges" element={<ChallengesPage />} />
+          <Route path="/rankings" element={<RankingsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
         </Routes>
       </main>

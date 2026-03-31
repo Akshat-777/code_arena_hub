@@ -7,57 +7,128 @@ const router = express.Router();
 
 const REFRESH_INTERVAL = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-export async function refreshHackathons() {
-  console.log("Refreshing hackathons from Devfolio...");
-  const newHacks = [];
-
+async function fetchDevfolio() {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
-    const res = await fetch("https://api.devfolio.co/api/hackathons?page=1&limit=50", {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      signal: controller.signal
+    const res = await fetch("https://api.devfolio.co/api/search/hackathons", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Origin": "https://devfolio.co" },
+      body: JSON.stringify({ type: "application_open", from: 0, size: 50 })
     });
-    clearTimeout(timeout);
     const data = await res.json();
-    
-    if (data.result && Array.isArray(data.result)) {
-      console.log(`Processing ${data.result.length} hackathons from Devfolio...`);
-      data.result.forEach((h, index) => {
-        try {
-          const start = new Date(h.starts_at).getTime();
-          const end = new Date(h.ends_at).getTime();
-          const regStart = h.registration_starts_at ? new Date(h.registration_starts_at).getTime() : start;
-          const regEnd = h.registration_ends_at ? new Date(h.registration_ends_at).getTime() : start;
+    return (data.hits?.hits || []).map(h => {
+      const s = h._source;
+      const start = new Date(s.starts_at).getTime();
+      const end = new Date(s.ends_at).getTime();
+      const regEnd = s.hackathon_setting?.reg_ends_at ? new Date(s.hackathon_setting.reg_ends_at).getTime() : start;
+      return {
+        host: "devfolio",
+        name: s.name,
+        vanity: s.slug,
+        url: `https://${s.slug}.devfolio.co/`,
+        registerationStartTimeUnix: Math.floor(new Date(s.hackathon_setting?.reg_starts_at || s.starts_at).getTime() / 1000),
+        registerationEndTimeUnix: Math.floor(regEnd / 1000),
+        hackathonStartTimeUnix: Math.floor(start / 1000),
+        duration: Math.round((end - start) / 60000)
+      };
+    });
+  } catch (e) { console.error("Devfolio fetch error:", e.message); return []; }
+}
 
-          if (!h.starts_at || !h.ends_at) {
-            console.warn(`Skipping hackathon ${h.name} due to missing dates.`);
-            return;
-          }
-
-          newHacks.push({
-            host: "devfolio",
-            name: h.name,
-            vanity: h.slug,
-            url: `https://${h.slug}.devfolio.co/`,
-            registerationStartTimeUnix: Math.floor(regStart / 1000),
-            registerationEndTimeUnix: Math.floor(regEnd / 1000),
-            hackathonStartTimeUnix: Math.floor(start / 1000),
-            duration: Math.round((end - start) / 60000)
-          });
-        } catch (e) {
-          console.error(`Error processing hackathon at index ${index}:`, e.message);
+async function fetchDevpost() {
+  try {
+    const res = await fetch("https://devpost.com/api/hackathons", {
+      headers: { "User-Agent": "Mozilla/5.0" }
+    });
+    const data = await res.json();
+    return (data.hackathons || []).map(h => {
+      let regEnd = Date.now() + 86400000 * 7; // Default 7 days
+      try {
+        if (h.submission_period_dates) {
+          const parts = h.submission_period_dates.split("-");
+          const endPart = parts[parts.length - 1].trim();
+          const parsed = new Date(endPart);
+          if (!isNaN(parsed.getTime())) regEnd = parsed.getTime();
         }
-      });
-    }
-  } catch (err) { console.error("Devfolio Refresh Error:", err.message); }
+      } catch (e) { /* fallback to default */ }
 
-  if (newHacks.length > 0) {
-    await UpcomingHackathon.deleteMany({});
-    await UpcomingHackathon.insertMany(newHacks);
-    
-    for (const h of newHacks) {
-      await AllHackathon.updateOne({ url: h.url }, { $set: h }, { upsert: true });
+      return {
+        host: "devpost",
+        name: h.title,
+        vanity: h.url.split("/").pop(),
+        url: h.url,
+        registerationStartTimeUnix: Math.floor(Date.now() / 1000),
+        registerationEndTimeUnix: Math.floor(regEnd / 1000),
+        hackathonStartTimeUnix: Math.floor(Date.now() / 1000),
+        duration: 2880
+      };
+    });
+  } catch (e) { console.error("Devpost fetch error:", e.message); return []; }
+}
+
+async function fetchUnstop() {
+  try {
+    const res = await fetch("https://unstop.com/api/public/opportunity/search-result?opportunity=hackathons&oppstatus=open", {
+      headers: { "User-Agent": "Mozilla/5.0" }
+    });
+    const data = await res.json();
+    return (data.data?.data || []).map(h => {
+      const regEnd = h.regnRequirements?.end_regn_dt ? new Date(h.regnRequirements.end_regn_dt).getTime() : Date.now();
+      const start = h.start_dt ? new Date(h.start_dt).getTime() : Date.now();
+      const end = h.end_dt ? new Date(h.end_dt).getTime() : start + 86400000;
+      return {
+        host: "unstop",
+        name: h.title,
+        vanity: h.public_url.split("/").pop(),
+        url: `https://unstop.com/${h.public_url}`,
+        registerationStartTimeUnix: Math.floor(new Date(h.regnRequirements?.start_regn_dt || Date.now()).getTime() / 1000),
+        registerationEndTimeUnix: Math.floor(regEnd / 1000),
+        hackathonStartTimeUnix: Math.floor(start / 1000),
+        duration: Math.round((end - start) / 60000)
+      };
+    });
+  } catch (e) { console.error("Unstop fetch error:", e.message); return []; }
+}
+
+export async function refreshHackathons() {
+  console.log("Refreshing hackathons from multiple platforms...");
+  
+  const results = await Promise.allSettled([
+    fetchDevfolio(),
+    fetchDevpost(),
+    fetchUnstop()
+  ]);
+
+  let allHacks = [];
+  results.forEach(res => {
+    if (res.status === "fulfilled") {
+      // Improve vanity extraction and ensure required fields
+      const processed = res.value.map(h => {
+        if (!h.vanity) {
+          const parts = h.url.split("/").filter(p => !!p);
+          h.vanity = parts[parts.length - 1] || "hackathon";
+        }
+        return h;
+      }).filter(h => h.name && h.url && h.vanity);
+      
+      allHacks = allHacks.concat(processed);
+    }
+  });
+
+  const now = Math.floor(Date.now() / 1000);
+  const filteredHacks = allHacks.filter(h => h.registerationEndTimeUnix > now);
+
+  console.log(`Fetched ${allHacks.length} hackathons. ${filteredHacks.length} passed time filter.`);
+
+  // Always clear and update
+  await UpcomingHackathon.deleteMany({});
+  if (filteredHacks.length > 0) {
+    try {
+      await UpcomingHackathon.insertMany(filteredHacks);
+      for (const h of filteredHacks) {
+        await AllHackathon.updateOne({ url: h.url }, { $set: h }, { upsert: true });
+      }
+    } catch (err) {
+      console.error("DB Update Error during refresh:", err.message);
     }
   }
 
@@ -66,7 +137,7 @@ export async function refreshHackathons() {
     { $set: { lastRefreshHackathons: new Date() } },
     { upsert: true }
   );
-  console.log(`Successfully refreshed ${newHacks.length} hackathons.`);
+  console.log(`Successfully refreshed ${filteredHacks.length} hackathons.`);
 }
 
 router.get("/", authMiddleware, async (req, res) => {
@@ -98,7 +169,9 @@ router.get("/", authMiddleware, async (req, res) => {
       });
     }
 
-    const query = {};
+    const query = {
+      registerationEndTimeUnix: { $gt: Math.floor(Date.now() / 1000) }
+    };
     if (host) {
       Object.assign(query, { host: { $in: host.split(",") } });
     }

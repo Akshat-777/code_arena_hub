@@ -16,6 +16,14 @@ const userSchema = new mongoose.Schema(
       codechef: { type: String, default: "" },
       skills: { type: [String], default: [] },
     },
+    cachedStats: {
+      leetcode: { rating: { type: Number, default: 0 }, solved: { type: Number, default: 0 } },
+      codeforces: { rating: { type: Number, default: 0 }, solved: { type: Number, default: 0 } },
+      codechef: { rating: { type: Number, default: 0 }, solved: { type: Number, default: 0 } },
+    },
+    globalScore: { type: Number, default: 0, index: true },
+    lastStatsUpdate: { type: Date },
+    fullStatsCache: { type: Object },
   },
   {
     timestamps: true,

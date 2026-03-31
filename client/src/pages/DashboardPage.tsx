@@ -36,30 +36,29 @@ const DashboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const fetchDashboard = async (force = false) => {
+    try {
+      setLoading(true);
+      const [userRes, statsRes] = await Promise.all([
+        api.get("/user/me"),
+        api.get(`/user/me/stats${force ? "?force=true" : ""}`)
+      ]);
+      setUser(userRes.data);
+      setStats(statsRes.data);
+      setError("");
+    } catch (err: any) {
+      setError(err?.response?.data?.message || "Failed to load dashboard");
+      if (err?.response?.status === 401) navigate("/login");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchDashboard = async () => {
-      try {
-        const [userRes, statsRes] = await Promise.all([
-          api.get("/user/me"),
-          api.get("/user/me/stats")
-        ]);
-        setUser(userRes.data);
-        setStats(statsRes.data);
-      } catch (err: any) {
-        setError(err?.response?.data?.message || "Failed to load dashboard");
-        if (err?.response?.status === 401) navigate("/login");
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchDashboard();
   }, [navigate]);
 
-  const handleLogout = () => {
-    localStorage.removeItem("code_arena_token");
-    window.dispatchEvent(new Event("auth-change"));
-    navigate("/login");
-  };
+  const handleRefresh = () => fetchDashboard(true);
 
   if (loading) return (
     <div className="ca-page ca-flex-center">
@@ -89,15 +88,16 @@ const DashboardPage = () => {
           )}
         </div>
         <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+          <button 
+            className="ca-btn" 
+            onClick={handleRefresh}
+            disabled={loading}
+            style={{ padding: "8px 16px", fontSize: 13 }}
+          >
+            {loading ? "⌛ Syncing..." : "🔄 Refresh Stats"}
+          </button>
           <button className="ca-btn-outline" onClick={() => navigate("/profile")}>
             ✏️ Profile
-          </button>
-          <button
-            className="ca-btn-outline"
-            onClick={handleLogout}
-            style={{ borderColor: "rgba(239,68,68,0.3)", color: "#f87171" }}
-          >
-            Sign out
           </button>
         </div>
       </div>
